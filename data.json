@@ -1,0 +1,45 @@
+{
+  "books": [
+    {
+      "title": "1984",
+      "author": "George Orwell",
+      "isbn": "9780451524935",
+      "genre": "Dystopia",
+      "quantity": 3
+    },
+    {
+      "title": "Python Crash Course",
+      "author": "Eric Matthes",
+      "isbn": "9781593279288",
+      "genre": "Programming",
+      "quantity": 2
+    },
+    {
+      "title": "fgf",
+      "author": "gf",
+      "isbn": "fb",
+      "genre": "fg",
+      "quantity": 1
+    }
+  ],
+  "borrowers": [
+    {
+      "name": "Alice",
+      "contact": "alice@example.com",
+      "membership_id": "84c88cff",
+      "borrowed_books": []
+    },
+    {
+      "name": "Bob",
+      "contact": "bob@example.com",
+      "membership_id": "edd0607a",
+      "borrowed_books": []
+    },
+    {
+      "name": "ramesh",
+      "contact": "9550354436",
+      "membership_id": "e56fa053",
+      "borrowed_books": []
+    }
+  ]
+}

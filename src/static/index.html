@@ -1,0 +1,264 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Library Manager</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 12px; background:#f5f7fb; color:#222; }
+    h1 { margin-bottom:6px; }
+    .container { display:flex; gap:12px; flex-wrap:wrap; }
+    .card { background:white; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:12px; width:320px; }
+    label { display:block; margin-top:6px; font-size:13px; }
+    input[type="text"], input[type="number"] { width:100%; padding:8px; margin-top:4px; box-sizing:border-box; }
+    button { margin-top:8px; padding:8px 10px; border:none; border-radius:6px; cursor:pointer; }
+    .btn-blue { background:#2b6ef6; color:white; }
+    .btn-red { background:#e05d5d; color:white; }
+    .list { max-height:300px; overflow:auto; margin-top:8px; }
+    .item { padding:8px; border-bottom:1px solid #eee; font-size:14px; }
+    small { color:#666; }
+    .flex-row { display:flex; gap:8px; align-items:center; }
+    .muted { color:#666; font-size:13px; }
+  </style>
+</head>
+<body>
+  <h1>Library Manager</h1>
+  <p class="muted">Add books, borrowers, borrow and return. All data is in-memory (server restart clears).</p>
+
+  <div class="container">
+    <!-- Book Form -->
+    <div class="card">
+      <h3>Add / Update Book</h3>
+      <label>Title <input id="book_title" type="text"></label>
+      <label>Author <input id="book_author" type="text"></label>
+      <label>ISBN <input id="book_isbn" type="text" placeholder="unique"></label>
+      <label>Genre <input id="book_genre" type="text"></label>
+      <label>Quantity <input id="book_quantity" type="number" value="1" min="0"></label>
+      <div class="flex-row">
+        <button class="btn-blue" onclick="addBook()">Add / Add Copies</button>
+        <button class="btn-red" onclick="deleteBook()">Delete Book</button>
+      </div>
+      <div id="book_msg" class="muted"></div>
+    </div>
+
+    <!-- Borrower Form -->
+    <div class="card">
+      <h3>Add Borrower</h3>
+      <label>Name <input id="b_name" type="text"></label>
+      <label>Contact <input id="b_contact" type="text"></label>
+      <div class="flex-row">
+        <button class="btn-blue" onclick="addBorrower()">Add Borrower</button>
+        <button onclick="seed()" title="Seed sample data">Seed</button>
+      </div>
+      <div id="borrower_msg" class="muted"></div>
+    </div>
+
+    <!-- Borrow/Return -->
+    <div class="card">
+      <h3>Borrow Book</h3>
+      <label>Membership ID <input id="borrow_mid" type="text"></label>
+      <label>Book ISBN <input id="borrow_isbn" type="text"></label>
+      <button class="btn-blue" onclick="borrowBook()">Borrow</button>
+      <div id="borrow_msg" class="muted"></div>
+
+      <hr>
+
+      <h3>Return Book</h3>
+      <label>Membership ID <input id="return_mid" type="text"></label>
+      <label>Book ISBN <input id="return_isbn" type="text"></label>
+      <button onclick="returnBook()">Return</button>
+      <div id="return_msg" class="muted"></div>
+    </div>
+
+    <!-- Lists -->
+    <div class="card" style="flex:1 1 600px;">
+      <h3>Search / List</h3>
+      <div class="flex-row">
+        <input id="search_q" type="text" placeholder="search query">
+        <select id="search_field">
+          <option value="title">Title</option>
+          <option value="author">Author</option>
+          <option value="genre">Genre</option>
+        </select>
+        <button onclick="searchBooks()">Search</button>
+        <button onclick="listBooks()">List All</button>
+      </div>
+
+      <div class="list" id="books_list"></div>
+
+      <hr>
+      <h4>Borrowers</h4>
+      <div class="flex-row">
+        <button onclick="listBorrowers()">List Borrowers</button>
+      </div>
+      <div class="list" id="borrowers_list"></div>
+    </div>
+  </div>
+
+  <script>
+    // ✅ Base API URL for Flask server
+    const BASE_URL = "http://localhost:5000";
+
+    const api = (path, opts) =>
+      fetch(BASE_URL + path, opts)
+        .then(r => r.json().catch(() => ({})))
+        .then(j => ({ status: j.status || 'ok', body: j, raw: j }));
+
+    async function addBook() {
+      const title = document.getElementById('book_title').value.trim();
+      const author = document.getElementById('book_author').value.trim();
+      const isbn = document.getElementById('book_isbn').value.trim();
+      const genre = document.getElementById('book_genre').value.trim();
+      const quantity = parseInt(document.getElementById('book_quantity').value || '0', 10);
+
+      if (!title || !author || !isbn) {
+        showMsg('book_msg', 'Please fill title, author, isbn');
+        return;
+      }
+
+      const res = await api('/api/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, author, isbn, genre, quantity })
+      });
+
+      if (res.body && res.body.book) {
+        showMsg('book_msg', 'Book added/updated.');
+        listBooks();
+      } else {
+        showMsg('book_msg', res.body.error || 'Error');
+      }
+    }
+
+    async function deleteBook() {
+      const isbn = document.getElementById('book_isbn').value.trim();
+      if (!isbn) { showMsg('book_msg', 'Enter ISBN to delete'); return; }
+      const res = await api('/api/books/' + encodeURIComponent(isbn), { method: 'DELETE' });
+      if (res.body && res.body.deleted) {
+        showMsg('book_msg', 'Book deleted');
+        listBooks();
+      } else {
+        showMsg('book_msg', res.body.error || 'Error');
+      }
+    }
+
+    async function addBorrower() {
+      const name = document.getElementById('b_name').value.trim();
+      const contact = document.getElementById('b_contact').value.trim();
+      if (!name || !contact) { showMsg('borrower_msg', 'Fill name and contact'); return; }
+      const res = await api('/api/borrowers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, contact })
+      });
+      if (res.body && res.body.borrower) {
+        showMsg('borrower_msg', 'Borrower added with ID: ' + res.body.borrower.membership_id);
+        listBorrowers();
+      } else showMsg('borrower_msg', res.body.error || 'Error');
+    }
+
+    async function borrowBook() {
+      const membership_id = document.getElementById('borrow_mid').value.trim();
+      const isbn = document.getElementById('borrow_isbn').value.trim();
+      if (!membership_id || !isbn) { showMsg('borrow_msg', 'Enter membership ID and ISBN'); return; }
+
+      const res = await api('/api/borrow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ membership_id, isbn })
+      });
+
+      if (res.body && res.body.borrowed) {
+        showMsg('borrow_msg', 'Borrowed. Due: ' + res.body.borrowed.due_date);
+        listBooks();
+        listBorrowers();
+      } else showMsg('borrow_msg', res.body.error || 'Error');
+    }
+
+    async function returnBook() {
+      const membership_id = document.getElementById('return_mid').value.trim();
+      const isbn = document.getElementById('return_isbn').value.trim();
+      if (!membership_id || !isbn) { showMsg('return_msg', 'Enter membership ID and ISBN'); return; }
+
+      const res = await api('/api/return', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ membership_id, isbn })
+      });
+
+      if (res.body && res.body.returned) {
+        showMsg('return_msg', 'Returned. Overdue: ' + res.body.overdue);
+        listBooks();
+        listBorrowers();
+      } else showMsg('return_msg', res.body.error || 'Error');
+    }
+
+    async function searchBooks() {
+      const q = document.getElementById('search_q').value.trim();
+      const field = document.getElementById('search_field').value;
+      const res = await api(`/api/search?q=${encodeURIComponent(q)}&field=${encodeURIComponent(field)}`);
+      displayBooks(res.body.results || []);
+    }
+
+    async function listBooks() {
+      const res = await api('/api/books');
+      displayBooks(res.body.books || []);
+    }
+
+    function displayBooks(books) {
+      const el = document.getElementById('books_list');
+      el.innerHTML = '';
+      if (!books.length) { el.innerHTML = '<div class="item">No books</div>'; return; }
+      books.forEach(b => {
+        const d = document.createElement('div');
+        d.className = 'item';
+        d.innerHTML = `<strong>${escapeHtml(b.title)}</strong> <small>(${escapeHtml(b.isbn)})</small><br>
+          <span>${escapeHtml(b.author)} • ${escapeHtml(b.genre)} • Available: ${b.quantity}</span>`;
+        el.appendChild(d);
+      });
+    }
+
+    async function listBorrowers() {
+      const res = await api('/api/borrowers');
+      const el = document.getElementById('borrowers_list');
+      el.innerHTML = '';
+      const list = res.body.borrowers || [];
+      if (!list.length) { el.innerHTML = '<div class="item">No borrowers</div>'; return; }
+      list.forEach(b => {
+        const d = document.createElement('div');
+        d.className = 'item';
+        const borrowedHtml = (b.borrowed_books && b.borrowed_books.length)
+          ? b.borrowed_books.map(bb => `ISBN:${bb.isbn} due:${new Date(bb.due_date).toLocaleDateString()}`).join('<br>')
+          : '<small>No borrowed books</small>';
+        d.innerHTML = `<strong>${escapeHtml(b.name)}</strong> <small>${escapeHtml(b.membership_id)}</small><br>
+          <span>${escapeHtml(b.contact)}</span><br>${borrowedHtml}`;
+        el.appendChild(d);
+      });
+    }
+
+    function showMsg(id, txt) {
+      const el = document.getElementById(id);
+      el.innerText = txt;
+      setTimeout(() => { if (el.innerText === txt) el.innerText = ''; }, 5000);
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    }
+
+    async function seed() {
+      const r = await api('/api/seed', { method: 'POST' });
+      if (r.body && r.body.seeded) {
+        showMsg('book_msg', 'Seeded sample data.');
+        listBooks();
+        listBorrowers();
+      } else showMsg('book_msg', r.body.error || 'Error');
+    }
+
+    // initial
+    listBooks();
+    listBorrowers();
+  </script>
+</body>
+</html>
